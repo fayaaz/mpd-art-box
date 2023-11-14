@@ -3,6 +3,7 @@ import contextlib
 import os
 import pathlib
 import threading
+import subprocess
 import time
 
 import configargparse
@@ -75,10 +76,19 @@ def app_main(mpd_host, mpd_port, background_color):
                 if height > win_height:
                     width = (win_height / height) * width
                     height = win_height
+            # use NEAREST because its running on a Pi Zero 2 and it sucks
+            scaled_pixbuf = pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.NEAREST)
+            image.set_from_pixbuf(scaled_pixbuf)
+            # This next bit is so bad
+            # I really should use PIL here but ffmpeg is available
+            # using /dev/shm to do it in memory and avoid writing file each time
+            scaled_pixbuf.savev("/dev/shm/coverbg.jpg", "jpeg", ["quality"], ["90"])
+            subprocess.Popen([
+                "/bin/bash",
+                "-c",
+                "ffmpeg -y -i /dev/shm/coverbg.jpg  -vf 'boxblur=5' /dev/shm/blurcover.jpg && pkill swaybg;  swaybg -i /dev/shm/blurcover.jpg -m tile & disown"
+            ]) # urgh
 
-            image.set_from_pixbuf(
-                pixbuf.scale_simple(
-                    width, height, GdkPixbuf.InterpType.BILINEAR))
         else:
             image.clear()
         return False
